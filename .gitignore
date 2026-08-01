@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Runtime output
+*.log
+*.out
+*.aux
+
+# OS / editor
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Large binaries
+*.pt
+*.pth
+*.h5
+*.npz
