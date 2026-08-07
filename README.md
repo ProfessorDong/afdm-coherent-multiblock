@@ -36,7 +36,7 @@ Every number in the paper traces to a JSON file under `runs/`.
 | Table IV (nuisance-eliminated CRB) | `crb_nuisance.py`, `crb_vs_B.py` | `crb_nuisance.json`, `crb_vs_B.json` |
 | Table V (hyperparameters) | `hp_robustness.py` (+/-30% sweep) | `hp_robustness.json` |
 | Fig. 2 (pilot-only MSE floor) | `make_paper_plots.py` | inline in manuscript |
-| Fig. 3 (basin of attraction) | `theta_sensitivity.py`, `coarse_rmse.py` | `coarse_rmse.json` |
+| Fig. 3 (basin of attraction) | `theta_sensitivity.py`, `coarse_rmse.py` | `theta_sensitivity.json`, `coarse_rmse.json` |
 | Figs. 4-5 (SER vs SNR) | `ber_vs_snr_v2.py` | `ber_vs_snr_v2_{3_32,5_16}.json` |
 | Fig. 6 (SER scaling in B) | `scaling_B_v2.py` | `scaling_B_v2.json` |
 | Fig. 7 (3GPP TDL-C) | `tdlc_evaluation.py` | `tdlc_v2.json` |

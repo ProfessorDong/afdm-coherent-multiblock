@@ -109,7 +109,11 @@ def run(cfg, snr_db, perturb_sigma, n_iters=6, n_lm=3, rho_min=0.5,
 
 
 def main():
+    import json
+    from pathlib import Path
+
     sigmas = (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0)
+    out = {"snr_db": 15.0, "sigmas": list(sigmas), "results": {}}
     for name, cfg in (
         ("HARD (P=5, N_p=16) @ 15dB",
          ExperimentConfig(N=128, kappa_max=5.0, ell_max=10.0, P=5, N_p=16, P_max=8)),
@@ -121,9 +125,14 @@ def main():
         print(f"CONFIG: {name}")
         print("=" * 78)
         print(f"{'perturb sigma':<14s}  {'final SER':>12s}")
+        out["results"][name] = {}
         for s in sigmas:
             ser = run(cfg, snr_db=15.0, perturb_sigma=s)
+            out["results"][name][str(s)] = ser
             print(f"{s:<14.2f}  {ser:>12.3e}")
+            # save incrementally: this sweep is long and has been lost before
+            Path("runs/theta_sensitivity.json").write_text(json.dumps(out, indent=1))
+    print("\nSaved: runs/theta_sensitivity.json")
 
 
 if __name__ == "__main__":

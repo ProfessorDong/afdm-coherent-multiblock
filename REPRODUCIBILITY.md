@@ -343,3 +343,15 @@ Two claims moved materially and were updated in the paper:
 The batching caveat has been removed from the manuscript: the reported curves
 are now those of the single-realization algorithm, and batch-size invariance
 (17.8/18.1/17.8% at batch 1/8/32) is reported instead.
+
+### Fig. 3 provenance closed
+
+`theta_sensitivity.py` previously only printed its sweep; Fig. 3's coordinates
+rested on a log rather than an artifact. It now writes
+`runs/theta_sensitivity.json` (incrementally, inside the sigma loop). The rerun
+reproduces the plotted values bit-for-bit — this script does not call
+`multiblock_dasbl_receiver`, so the per-realization v_eff change did not reach
+it. All 20 plotted points and the caption's derived ratios (1.59x Easy, 2.13x
+Hard, 0.59%/0.99% dotted lines, >=38% at sigma>=0.5) verify against the file.
+
+Every figure in the paper is now backed by a JSON artifact.
