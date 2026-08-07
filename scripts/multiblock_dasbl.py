@@ -196,7 +196,8 @@ def multiblock_dasbl_receiver(system, batch, const, cfg,
                               soft_symbols=False, calibrate_output=False,
                               use_aperture=True,
                               gamma_lr=0.5, max_step=0.15, slack=1e-4,
-                              kappa_window=0.30, kappa_step=0.003, K_cg=30):
+                              kappa_window=0.30, kappa_step=0.003, K_cg=30,
+                              per_realization_veff=True):
     """Multi-block iterative DASBL with data-aided reacquisition and shared theta.
 
     soft_symbols: feed back the posterior mean E[x_m | y] instead of a thresholded
@@ -304,7 +305,14 @@ def multiblock_dasbl_receiver(system, batch, const, cfg,
         # the channel-mismatch error does not, so a sigma_w^2-regularized CG-MMSE
         # increasingly amplifies channel-estimation error -- this, not softmax
         # overconfidence, is the dominant cause of the high-SNR upturn.
-        reg = sigma_w2 if v_eff is None else float(v_eff.mean().clamp(min=sigma_w2))
+        if v_eff is None:
+            reg = sigma_w2
+        elif per_realization_veff:
+            # One scalar per realization, exactly Eq. (18). A deployed receiver
+            # sees a single frame and cannot pool residuals across realizations.
+            reg = v_eff.clamp(min=sigma_w2).reshape(B_batch, 1)
+        else:
+            reg = float(v_eff.mean().clamp(min=sigma_w2))
         for b in range(B_block):
             phase_b = block_doppler_phase(kap_hat, b, N, N_cp_det)     # (B_batch, P)
             h_b = h_hat * phase_b

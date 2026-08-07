@@ -8,8 +8,8 @@
   "batch_size": 32,
   "results": {
     "Full MB-IDAR": {
-      "mean": 0.12358398418873548,
-      "std": 0.0022778049119091858,
+      "mean": 0.1298380523920059,
+      "std": 0.0028792272878482225,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 3,
@@ -18,8 +18,8 @@
       }
     },
     "without data-aided re-acquisition": {
-      "mean": 0.15253295823931695,
-      "std": 0.002444164372603345,
+      "mean": 0.15818278007209302,
+      "std": 0.002738606626134709,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 3,
@@ -28,8 +28,8 @@
       }
     },
     "without safeguarded gradient refinement": {
-      "mean": 0.134307861328125,
-      "std": 0.0023670484305710884,
+      "mean": 0.13996785413473845,
+      "std": 0.003384346690660753,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 0,
@@ -38,8 +38,8 @@
       }
     },
     "without reliability weighting": {
-      "mean": 0.12272338941693306,
-      "std": 0.0027050764340382505,
+      "mean": 0.12955118846148253,
+      "std": 0.0023442366263218863,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 3,
@@ -48,8 +48,8 @@
       }
     },
     "only pilot-only initial (no outer iters)": {
-      "mean": 0.23386434018611907,
-      "std": 0.0032911562747392686,
+      "mean": 0.23840331993997096,
+      "std": 0.0033588503499682727,
       "kwargs": {
         "n_outer": 0,
         "n_lm_per_outer": 0,

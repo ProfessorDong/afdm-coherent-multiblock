@@ -292,3 +292,54 @@ deviation 0.13 pp, confirming a path-common ramp is absorbed by CG-MMSE.
 
 Both results replace previously unverified assertions in the synchronization
 remark ("well below one radian"; "benign for communication").
+
+### Effective-variance pooling and batch invariance
+
+`scripts/veff_batch_invariance.py` -> `runs/veff_batch_invariance.json`.
+
+Eq. (18) defines v_eff as one scalar per realization. The batched
+implementation pooled it into a batch mean for the CG ridge (the softmax weight
+was always per realization), which couples independent Monte Carlo
+realizations. `multiblock_dasbl_receiver` now takes `per_realization_veff`
+(default False, preserving every published number); True implements Eq. (18)
+exactly.
+
+Pooled vs per-realization, 5 seeds x 8 x 32, all three operating points and
+B = 1,2,4,8: max |delta| = 0.75 pp, mixed in sign, within the seed spread.
+Batch-size invariance at Hard B=4 with the per-realization rule:
+17.76 / 18.05 / 17.81% at batch 1 / 8 / 32 (256 realizations per seed).
+
+The pooling is therefore immaterial, but the published curves still come from
+the pooled path. Regenerating everything with `per_realization_veff=True` is
+the clean final step; the measurement above bounds the risk at <=0.75 pp.
+
+### Per-realization regeneration (2026-08-07) — SUPERSEDES all earlier SER numbers
+
+`per_realization_veff` now defaults to **True** in `multiblock_dasbl_receiver`,
+so the CG ridge uses the per-realization v_eff of Eq. (18) rather than a batch
+mean. `scripts/regen_per_realization.sh` re-ran all 14 receiver-dependent
+experiments (plus `channel_aging.py`); the pooled artifacts are preserved in
+`runs_pooled_backup/` for comparison. 14/14 succeeded.
+
+Headline effects (pooled -> per-realization):
+
+    Hard  B=1/2/4/8   49.94/26.67/17.69/15.81  ->  50.05/27.42/17.81/15.65
+    Easy  B=1/2/4/8   11.52/ 5.75/ 8.20/ 9.18  ->  11.67/ 5.66/ 8.01/ 8.77
+    Table III full            12.98            ->  12.36
+    advantage ratios     1.16/1.58/1.77        ->  1.13/1.57/1.79
+
+Both headlines survive: 3.2x over single-block (50.05/15.65 = 3.20) and 1.8x
+over the D-GESBL-style baseline (28.05/15.65 = 1.79).
+
+Unchanged by construction, and verified so: Genie/Classical/JPNCE-SBL/PBiGaBP
+(do not use v_eff), Oracle-theta (retains nominal sigma_w^2 by design), the
+D-GESBL baseline, correct-cell probability and coarse-support RMSE (front-end
+only), and the CRB columns of Table IV (only its empirical RMSE moved).
+
+Two claims moved materially and were updated in the paper:
+- noise-mismatch spread 0.004 pp -> 0.19 pp (still negligible)
+- hyperparameter sweep max |delta| 0.55 pp -> 1.07 pp
+
+The batching caveat has been removed from the manuscript: the reported curves
+are now those of the single-realization algorithm, and batch-size invariance
+(17.8/18.1/17.8% at batch 1/8/32) is reported instead.

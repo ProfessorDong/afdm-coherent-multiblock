@@ -66,6 +66,20 @@ python scripts/crb_nuisance.py        # Table IV
 Results are written under `runs/`. Seeds are `k*137 + 42` throughout, so reruns
 reproduce the published values exactly.
 
+### Effective variance is per realization
+
+`multiblock_dasbl_receiver` regularizes CG-MMSE and the confidence weight with
+`v_eff` computed **per realization**, exactly as the paper defines it. An
+earlier version pooled it into a batch mean for the CG ridge, which coupled
+independent Monte Carlo realizations; `scripts/veff_batch_invariance.py`
+measures both (max difference 0.75 pp, mixed sign, within the seed spread) and
+verifies batch-size invariance (17.8 / 18.1 / 17.8% at batch 1 / 8 / 32).
+
+All reported numbers were regenerated under the per-realization rule via
+`scripts/regen_per_realization.sh` (14/14 experiments). The superseded pooled
+artifacts are kept in `runs_pooled_backup/` so the change is auditable; they
+are **not** the published values.
+
 ## The D-GESBL-style baseline
 
 `scripts/dgesbl_baseline.py` is an **adaptation** of Luo *et al.* (IEEE TCOM
@@ -96,6 +110,10 @@ paper's claim is scoped accordingly.
   corollary is not implemented.
 - `phase_coherence.py` bounds the usable aperture: at roughly one radian of
   accumulated block phase, `B=8` stops beating `B=4`.
+- The practical receiver stays far above the nuisance-eliminated Doppler CRB
+  (610x in RMSE units at `B=8`). `reviewer_response.py` shows why: only 48% of
+  paths land in the correct Nyquist cell at the Hard point, and the coarse RMSE
+  conditioned on that event is 0.22 rather than 1.57.
 
 ## Notes
 
