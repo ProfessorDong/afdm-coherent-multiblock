@@ -23,9 +23,9 @@ from multiblock_dasbl import eval_multiblock
 SNR = 15.0
 B_BLOCK = 4
 DESIGNS = ("repeated", "complementary", "hopping")
-N_SEEDS = 3
+N_SEEDS = 5
 N_BATCHES = 8
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 
 
 def main():

@@ -62,7 +62,7 @@ def measure_one(cfg, B_block, seed):
         with torch.no_grad():
             hard, ell_hat, kap_hat, h_hat = multiblock_dasbl_receiver(
                 system, batch, const, cfg,
-                n_outer=6, n_lm_per_outer=3, rho_min=0.9, use_reacq=True,
+                n_outer=6, n_lm_per_outer=3, rho_min=0.5, use_reacq=True,
             )
         match = hungarian_match(ell_hat, kap_hat,
                                 batch.theta_true[..., 0], batch.theta_true[..., 1])

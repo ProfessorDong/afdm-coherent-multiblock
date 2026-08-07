@@ -29,21 +29,19 @@ from multiblock_dasbl import eval_multiblock
 
 SNR = 15.0
 BS = [1, 2, 4, 8]
-N_SEEDS = 3
+N_SEEDS = 5
 N_BATCHES = 8
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 
 
 def eval_B(cfg, B):
     vals = []
     for k in range(N_SEEDS):
         seed = k * 137 + 42
-        if B == 1:
-            s = receiver_ser(cfg, SNR, use_reacq=True,
-                              n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed)
-        else:
-            s = eval_multiblock(cfg, SNR, B_block=B, design="hopping",
-                                 n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed)
+        # B=1 is SB-IDAR: same receiver, one block. Using the identical code path
+        # guarantees SB and MB get the same calibration and hyperparameters.
+        s = eval_multiblock(cfg, SNR, B_block=B, design="hopping",
+                             n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed)
         vals.append(s)
     arr = np.array(vals)
     return float(arr.mean()), float(arr.std())

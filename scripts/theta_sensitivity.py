@@ -36,7 +36,7 @@ from afdm.training import sample_batch
 from afdm.vem import safeguarded_lm_theta_step
 
 
-def run(cfg, snr_db, perturb_sigma, n_iters=6, n_lm=3, rho_min=0.9,
+def run(cfg, snr_db, perturb_sigma, n_iters=6, n_lm=3, rho_min=0.5,
         n_batches=8, batch_size=32, seed=42):
     system = cfg.system(); channel = cfg.channel(); const = cfg.constellation()
     pp, pv = cfg.pilots()

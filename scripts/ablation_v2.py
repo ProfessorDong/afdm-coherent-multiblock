@@ -1,7 +1,7 @@
 """Regenerate Table IV (ablation study) with multi-seed error bars.
 
 5 configurations at (P=5, N_p=32), B=4, 15 dB:
-  Full MB-IDAR (default n_outer=6, n_lm_per_outer=3, rho_min=0.9, use_reacq=True)
+  Full MB-IDAR (default n_outer=6, n_lm_per_outer=3, rho_min=0.5, use_reacq=True)
   Without data-aided re-acquisition (use_reacq=False)
   Without safeguarded gradient refinement (n_lm_per_outer=0)
   Without reliability weighting (rho_min=0.0)
@@ -30,9 +30,9 @@ from multiblock_dasbl import multiblock_dasbl_receiver
 
 SNR = 15.0
 B_BLOCK = 4
-N_SEEDS = 3
+N_SEEDS = 5
 N_BATCHES = 8
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 
 
 def eval_one_seed(cfg, seed, **kwargs):
@@ -67,15 +67,15 @@ def main():
 
     ablation_configs = [
         ("Full MB-IDAR",
-         dict(n_outer=6, n_lm_per_outer=3, rho_min=0.9, use_reacq=True)),
+         dict(n_outer=6, n_lm_per_outer=3, rho_min=0.5, use_reacq=True)),
         ("without data-aided re-acquisition",
-         dict(n_outer=6, n_lm_per_outer=3, rho_min=0.9, use_reacq=False)),
+         dict(n_outer=6, n_lm_per_outer=3, rho_min=0.5, use_reacq=False)),
         ("without safeguarded gradient refinement",
-         dict(n_outer=6, n_lm_per_outer=0, rho_min=0.9, use_reacq=True)),
+         dict(n_outer=6, n_lm_per_outer=0, rho_min=0.5, use_reacq=True)),
         ("without reliability weighting",
          dict(n_outer=6, n_lm_per_outer=3, rho_min=0.0, use_reacq=True)),
         ("only pilot-only initial (no outer iters)",
-         dict(n_outer=0, n_lm_per_outer=0, rho_min=0.9, use_reacq=False)),
+         dict(n_outer=0, n_lm_per_outer=0, rho_min=0.5, use_reacq=False)),
     ]
 
     results = {}

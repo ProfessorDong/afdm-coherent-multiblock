@@ -3,43 +3,43 @@
   "B": 4,
   "P": 5,
   "N_p": 32,
-  "N_seeds": 3,
+  "N_seeds": 5,
   "N_batches": 8,
-  "batch_size": 16,
+  "batch_size": 32,
   "results": {
     "Full MB-IDAR": {
-      "mean": 0.07619222067296505,
-      "std": 0.005798947199827913,
+      "mean": 0.1298380523920059,
+      "std": 0.0028792272878482225,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 3,
-        "rho_min": 0.9,
+        "rho_min": 0.5,
         "use_reacq": true
       }
     },
     "without data-aided re-acquisition": {
-      "mean": 0.08678521014129122,
-      "std": 0.007853722758426197,
+      "mean": 0.15818278007209302,
+      "std": 0.002738606626134709,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 3,
-        "rho_min": 0.9,
+        "rho_min": 0.5,
         "use_reacq": false
       }
     },
     "without safeguarded gradient refinement": {
-      "mean": 0.18334282748401165,
-      "std": 0.00521808234948908,
+      "mean": 0.13996785413473845,
+      "std": 0.003384346690660753,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 0,
-        "rho_min": 0.9,
+        "rho_min": 0.5,
         "use_reacq": true
       }
     },
     "without reliability weighting": {
-      "mean": 0.07600233284756541,
-      "std": 0.0051619891399821176,
+      "mean": 0.12955118846148253,
+      "std": 0.0023442366263218863,
       "kwargs": {
         "n_outer": 6,
         "n_lm_per_outer": 3,
@@ -48,12 +48,12 @@
       }
     },
     "only pilot-only initial (no outer iters)": {
-      "mean": 0.2654283307492733,
-      "std": 0.0011376680789504127,
+      "mean": 0.23840331993997096,
+      "std": 0.0033588503499682727,
       "kwargs": {
         "n_outer": 0,
         "n_lm_per_outer": 0,
-        "rho_min": 0.9,
+        "rho_min": 0.5,
         "use_reacq": false
       }
     }

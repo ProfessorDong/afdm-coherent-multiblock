@@ -91,6 +91,39 @@ def ambiguity_function(
     return A, ell_grid, kappa_grid
 
 
+def ambiguity_function_complex(
+    r: torch.Tensor,
+    s_pilot: torch.Tensor,
+    N: int,
+    N_cp: int,
+    kappa_max: float,
+    ell_max: float,
+    oversample_doppler: int = 2,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Same as ambiguity_function but returns the complex correlation C (not |C|^2).
+
+    Used for coherent multi-block stacking, where the block-b contribution must
+    be phase-aligned by exp(-j 2 pi kappa_hyp * b * beta) before summing.
+    """
+    device = r.device
+    dtype = r.dtype
+    B = r.shape[0]
+    if s_pilot.ndim == 1:
+        s_pilot = s_pilot.unsqueeze(0).expand(B, -1)
+    L_ell = int(ell_max) + 1
+    ell_grid = torch.arange(L_ell, device=device, dtype=torch.float32)
+    L_kappa = int(oversample_doppler * (2 * int(kappa_max) + 1)) + 1
+    kappa_grid = torch.linspace(-kappa_max, kappa_max, L_kappa, device=device, dtype=torch.float32)
+    n = torch.arange(N, device=device, dtype=torch.float32)
+    doppler_phase = torch.exp(-1j * 2 * torch.pi * kappa_grid.unsqueeze(-1) * (n + N_cp) / N).to(dtype)
+    r_demod = r.unsqueeze(1) * doppler_phase.unsqueeze(0)
+    R = torch.fft.fft(r_demod, dim=-1)
+    S = torch.fft.fft(s_pilot, dim=-1).unsqueeze(1)
+    C = torch.fft.ifft(R * torch.conj(S), dim=-1)
+    C_selected = C[..., :L_ell] / (N ** 0.5)   # normalized so |C|^2 matches ambiguity magnitude
+    return C_selected, ell_grid, kappa_grid
+
+
 def cfar_peaks(
     A: torch.Tensor,
     K: int,

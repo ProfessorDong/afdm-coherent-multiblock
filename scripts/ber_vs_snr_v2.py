@@ -26,9 +26,9 @@ from phase_diagram import genie_ser, classical_ser, oracletheta_dasbl_ser, recei
 from multiblock_dasbl import eval_multiblock
 
 
-N_SEEDS = 2
-N_BATCHES = 6
-BATCH_SIZE = 16
+N_SEEDS = 3
+N_BATCHES = 8
+BATCH_SIZE = 32
 
 
 def multi_seed_avg(fn, n_seeds=N_SEEDS):
@@ -56,7 +56,7 @@ def main():
             t0 = time.time()
             g, g_s   = multi_seed_avg(lambda seed: genie_ser(cfg, snr, n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))
             c, c_s   = multi_seed_avg(lambda seed: classical_ser(cfg, snr, n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))
-            sb, sb_s = multi_seed_avg(lambda seed: receiver_ser(cfg, snr, use_reacq=True, n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))
+            sb, sb_s = multi_seed_avg(lambda seed: eval_multiblock(cfg, snr, B_block=1, design="hopping", n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))
             m2, m2_s = multi_seed_avg(lambda seed: eval_multiblock(cfg, snr, B_block=2, design="hopping", n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))
             m4, m4_s = multi_seed_avg(lambda seed: eval_multiblock(cfg, snr, B_block=4, design="hopping", n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))
             o, o_s   = multi_seed_avg(lambda seed: oracletheta_dasbl_ser(cfg, snr, n_batches=N_BATCHES, batch_size=BATCH_SIZE, seed=seed))

@@ -33,9 +33,9 @@ from multiblock_dasbl import eval_multiblock
 
 
 SNR = 15.0
-N_SEEDS = 3
+N_SEEDS = 5
 N_BATCHES = 8
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 
 
 def baseline_ser_seed(det, cfg, snr_db, seed, n_batches=N_BATCHES, batch_size=BATCH_SIZE):
@@ -81,9 +81,9 @@ def eval_row(cfg, method):
         return multi_seed_avg(lambda seed: baseline_ser_seed(det, cfg, SNR, seed))
 
     if method == "sb_idar":
-        return multi_seed_avg(lambda seed: receiver_ser(cfg, SNR, use_reacq=True,
-                                                         n_batches=N_BATCHES,
-                                                         batch_size=BATCH_SIZE, seed=seed))
+        return multi_seed_avg(lambda seed: eval_multiblock(cfg, SNR, B_block=1, design="hopping",
+                                                          n_batches=N_BATCHES,
+                                                          batch_size=BATCH_SIZE, seed=seed))
 
     if method.startswith("mb"):
         B = int(method[2:])

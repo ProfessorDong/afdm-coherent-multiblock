@@ -1,24 +1,32 @@
 """Multi-block AFDM primitives for pilot-diverse channel acquisition.
 
 Setup: over a short window of B AFDM blocks,
-    r_b = A_b(theta_b, x_b) h_b + w_b,       b = 1, ..., B
+    r_b = A_b(theta, x_b) D_b(kappa) h + w_b,   b = 0, 1, ..., B-1
 
-Assumptions used here (kept simple for the Day 3-5 oracle experiment):
-  * path delays and Dopplers are SHARED across the B blocks (theta_b == theta),
-    i.e. blocks are within one channel coherence window;
-  * complex gains are SHARED as well (h_b == h) — extending to slowly-drifting
-    gains is Day 6-10 work;
+where D_b(kappa) is the block-dependent Doppler-phase diagonal
+    D_b(kappa) = diag( exp(j 2 pi kappa_i * b * (N + N_cp) / N) )
+
+Assumptions:
+  * path delays and Dopplers (theta = (ell, kappa)) are SHARED across the B
+    blocks (blocks within one channel coherence window);
+  * complex gains h are SHARED at the block-0 reference phase; block-to-block
+    phase evolution due to nonzero Doppler is captured by the deterministic
+    D_b(kappa) factor. This is physically accurate for constant-velocity paths
+    with block spacing (N + N_cp) samples; correlated fading is a separate
+    extension;
   * each block uses a DIFFERENT pilot pattern (positions and/or values) at
     fixed per-block overhead N_p.
 
-The multi-block LS problem stacks the B regression matrices:
-    r_stack = [r_1; ...; r_B] = [A_1; ...; A_B] h + w_stack
+Because D_b(kappa) is deterministic given kappa (which is estimated as part of
+theta), the receiver naturally handles the evolving gains: after estimating
+theta, it builds phase-corrected per-block atoms A_b(theta, x_b) D_b(kappa) and
+estimates the reference gain h via stacked ridge regression.
+
+The multi-block LS problem stacks the B phase-corrected regression matrices:
+    r_stack = [r_1; ...; r_B] = [A_1 D_1; ...; A_B D_B] h + w_stack
 
 so the joint LS estimator is
-    h_ls = (sum_b A_b^H A_b + lam I)^{-1} (sum_b A_b^H r_b).
-
-Under complementary pilots, sum_b A_b^H A_b is better-conditioned and the
-data self-interference biases in different blocks average out.
+    h_ls = (sum_b (A_b D_b)^H (A_b D_b) + lam I)^{-1} sum_b (A_b D_b)^H r_b.
 """
 
 from __future__ import annotations
@@ -90,6 +98,30 @@ PILOT_DESIGNS = {
 
 
 # ---------------------------------------------------------------------------
+# Block-dependent Doppler phase
+# ---------------------------------------------------------------------------
+def block_doppler_phase(
+    kappa: torch.Tensor,        # (B_batch, P) normalized fractional Doppler
+    b: int,                     # block index (0-based)
+    N: int,                     # AFDM block length
+    N_cp: int,                  # cyclic-prefix length
+) -> torch.Tensor:
+    """Return the per-path phase factor at the start of block b.
+
+    Physical origin: block b starts at absolute sample t_b = b * (N + N_cp),
+    so a path with normalized Doppler kappa_i = nu_i / Delta_f accumulates
+    phase 2 pi nu_i t_b T_s = 2 pi kappa_i * b * (N + N_cp) / N by the start
+    of block b (relative to block 0). The result is broadcast-multiplied onto
+    the shared reference gain h to give the effective per-block gain h_b.
+
+    Shape: same as kappa, complex dtype matching the operator.
+    """
+    beta = (N + N_cp) / N
+    phase = 2.0 * torch.pi * kappa * b * beta
+    return torch.exp(1j * phase.to(torch.float32)).to(torch.complex64)
+
+
+# ---------------------------------------------------------------------------
 # Multi-block batch sampler
 # ---------------------------------------------------------------------------
 @dataclass
@@ -140,13 +172,18 @@ def sample_multiblock(
         x[:, b, pilot_positions[b]] = pilot_values[b].unsqueeze(0)
     labels = (x.unsqueeze(-1) - constellation.reshape(1, 1, 1, -1)).abs().argmin(dim=-1)
 
-    # Apply channel per block. Use the SAME (theta, h) for all blocks per batch elem.
-    op = FastAFDMOperator(system=system, ell=ell, kappa=kap, h=h_true)
+    # Apply channel per block with block-dependent Doppler phase h_b = h * D_b(kappa).
+    # Shared (theta, h_ref) across blocks; block-b effective gain evolves due to
+    # inter-block time gap of (N + N_cp) samples per block.
+    N_cp = system.ell_max
     y_clean_list = []
     for b in range(B_block):
-        y_b = op.matvec(x[:, b, :])   # (B_batch, N)
+        phase_b = block_doppler_phase(kap, b, N, N_cp)              # (B_batch, P)
+        h_b = h_true * phase_b                                       # (B_batch, P)
+        op_b = FastAFDMOperator(system=system, ell=ell, kappa=kap, h=h_b)
+        y_b = op_b.matvec(x[:, b, :])                                # (B_batch, N)
         y_clean_list.append(y_b)
-    y_clean = torch.stack(y_clean_list, dim=1)                          # (B_batch, B_block, N)
+    y_clean = torch.stack(y_clean_list, dim=1)                       # (B_batch, B_block, N)
     signal_pow = (y_clean.abs() ** 2).mean()
     sigma_w2 = 10 ** (-snr_db / 10)
     noise_std = torch.sqrt(signal_pow * sigma_w2 / 2)
@@ -190,6 +227,7 @@ def multiblock_ls_gains(
     B_batch, B_block, N = batch.r.shape
     device = batch.r.device; dtype = batch.r.dtype
     P = ell.shape[1]
+    N_cp = system.ell_max
     AhA_sum = torch.zeros(B_batch, P, P, dtype=dtype, device=device)
     Ahr_sum = torch.zeros(B_batch, P, dtype=dtype, device=device)
     for b in range(B_block):
@@ -199,8 +237,11 @@ def multiblock_ls_gains(
         else:
             x_hat = batch.x_true[:, b, :]
         A = build_regression_matrix(system, ell, kap, x_hat)              # (B_batch, N, P)
-        AH = A.conj().transpose(-1, -2)
-        AhA_sum += AH @ A
+        # Multiply columns by block-dependent Doppler phase D_b(kappa).
+        phase_b = block_doppler_phase(kap, b, N, N_cp)                    # (B_batch, P)
+        A_b = A * phase_b.unsqueeze(1)                                    # broadcast over N
+        AH = A_b.conj().transpose(-1, -2)
+        AhA_sum += AH @ A_b
         Ahr_sum += (AH @ batch.r[:, b, :].unsqueeze(-1)).squeeze(-1)
     ridge = lambda_ridge * torch.eye(P, dtype=dtype, device=device).unsqueeze(0)
     h_ls = torch.linalg.solve(AhA_sum + ridge, Ahr_sum.unsqueeze(-1)).squeeze(-1)
@@ -221,14 +262,16 @@ def stacked_atom(
     """
     device = system.device; dtype = system.dtype; N = system.N
     B_block = pilot_positions.shape[0]
+    N_cp = system.ell_max
     atoms = []
+    ell_t = torch.tensor([[ell]], dtype=torch.float32, device=device)
+    kap_t = torch.tensor([[kap]], dtype=torch.float32, device=device)
     for b in range(B_block):
         x_p = torch.zeros(1, N, dtype=dtype, device=device)
         x_p[0, pilot_positions[b]] = pilot_values[b]
-        ell_t = torch.tensor([[ell]], dtype=torch.float32, device=device)
-        kap_t = torch.tensor([[kap]], dtype=torch.float32, device=device)
         A = build_regression_matrix(system, ell_t, kap_t, x_p)   # (1, N, 1)
-        atoms.append(A[0, :, 0])
+        phase_b = block_doppler_phase(kap_t, b, N, N_cp)         # (1, 1)
+        atoms.append(A[0, :, 0] * phase_b[0, 0])
     return torch.cat(atoms, dim=0)
 
 

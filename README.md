@@ -1,34 +1,53 @@
-# AFDM Multi-Block Iterative Data-Aided Receiver (MB-IDAR)
+# AFDM Coherent Multi-Block Doppler Estimation (MB-IDAR)
 
 Reference implementation and experimental artifacts for
 
-> **Iterative Multi-Block Data-Aided Off-Grid Channel Estimation and Detection for AFDM**
+> **Coherent Multi-Block Doppler Estimation and Data-Aided Detection for AFDM**
 > *L. Dong*, IEEE Trans. Commun. (under review), 2026.
 
-The receiver alternates reliability-weighted data-aided regression, safeguarded gradient support refinement, and CG-MMSE detection over a coherence window of `B` AFDM blocks sharing the same physical channel but using per-block pilot diversity.
+Consecutive AFDM blocks accrue a deterministic inter-block Doppler phase
+`D_b(kappa) = diag(exp(j 2 pi kappa_p b beta))`, `beta = (N + N_cp)/N`, so `B`
+contiguous blocks form a **slow-time aperture** whose Doppler Fisher information
+grows as `Theta(B^3)` rather than the `Theta(B)` of independent averaging. The
+same ramp is periodic, creating a Doppler-Nyquist ambiguity of period `1/beta`,
+which forces a coarse-to-fine design: non-coherent peak acquisition, a
+sub-Nyquist coherent local search (*aperture synthesis*), and a phase-corrected
+data-aided loop calibrated by a measured effective variance `v_eff`.
 
 ## What's here
 
 ```
-afdm/                Core library (system, operators, channels, classical & SBL & BP baselines)
-scripts/             Experiment scripts that reproduce the figures/tables in the paper
+afdm/                Core library (system, operators, channels, classical/SBL/BP baselines)
+scripts/             Experiment scripts reproducing the paper's figures and tables
 tests/               Unit tests for the core primitives
-runs/                Numerical results (JSON) underlying the paper's plots
+runs/                Numerical results (JSON) underlying every reported number
 requirements.txt     Python dependencies
 ```
 
-Selected scripts:
+## Reproducing the paper
 
-| Script | Reproduces |
-|---|---|
-| `scripts/ber_vs_snr.py` | Fig 4 / Fig 5 (SER vs SNR, Easy / Hard) |
-| `scripts/multiblock_dasbl.py` | Fig 6 (SER scaling in `B`), Table II |
-| `scripts/multi_seed_error_bars.py` | Table I (SER at 15 dB with error bars) |
-| `scripts/channel_aging.py` | Fig 10 (robustness to shared-support violation) |
-| `scripts/convergence_trace.py` | Fig 8 (outer-loop convergence) |
-| `scripts/phase_diagram.py` | Fig 7 (empirical recovery-regime map) |
-| `scripts/tdlc_evaluation.py` | Fig 9 (3GPP TDL-C evaluation) |
-| `scripts/run_ablation.py` | Table III (ablation) |
+Every number in the paper traces to a JSON file under `runs/`.
+
+| Paper item | Script | Artifact |
+|---|---|---|
+| Table I (SER at 15 dB) | `multi_seed_error_bars.py`, `scaling_B_v2.py`, `run_dgesbl_retuned.py` | `multiseed_15db.json`, `scaling_B_v2.json`, `dgesbl_retuned.json` |
+| Table II (fair aggregate pilots) | `fair_pilots_v2.py`, `run_dgesbl_retuned.py` | `fair_pilots_v2.json`, `dgesbl_retuned.json` |
+| Table III (ablation) | `ablation_v2.py` | `ablation_v2.json` |
+| Table IV (nuisance-eliminated CRB) | `crb_nuisance.py`, `crb_vs_B.py` | `crb_nuisance.json`, `crb_vs_B.json` |
+| Table V (hyperparameters) | `hp_robustness.py` (+/-30% sweep) | `hp_robustness.json` |
+| Fig. 2 (pilot-only MSE floor) | `make_paper_plots.py` | inline in manuscript |
+| Fig. 3 (basin of attraction) | `theta_sensitivity.py`, `coarse_rmse.py` | `coarse_rmse.json` |
+| Figs. 4-5 (SER vs SNR) | `ber_vs_snr_v2.py` | `ber_vs_snr_v2_{3_32,5_16}.json` |
+| Fig. 6 (SER scaling in B) | `scaling_B_v2.py` | `scaling_B_v2.json` |
+| Fig. 7 (3GPP TDL-C) | `tdlc_evaluation.py` | `tdlc_v2.json` |
+| Aperture ablation (Sec. V) | `aperture_ablation.py` | `aperture_ablation.json` |
+| Cubic-bound attainability | `localml_bcubed.py` | `localml_bcubed.json` |
+| 16-QAM / high-order study | `highorder_sweep.py` | `highorder_sweep.json` |
+| Convergence in `T` | `convergence_v3.py` | `convergence_v3.json` |
+| Noise-mismatch robustness | `robustness_v2.py` | `robustness_v2.json` |
+
+See `REPRODUCIBILITY.md` for the exact protocol behind each entry, including
+which files supersede earlier ones.
 
 ## Quick start
 
@@ -36,33 +55,47 @@ Selected scripts:
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Reproduce Fig 6 (SER vs B at 15 dB)
-python scripts/multiblock_dasbl.py --Bs 1,2,4,8 --configs all
-
-# Reproduce Fig 10 (channel aging)
-python scripts/channel_aging.py
+python scripts/scaling_B_v2.py        # Fig. 6 / Table I multi-block rows
+python scripts/ablation_v2.py         # Table III
+python scripts/crb_nuisance.py        # Table IV
 ```
 
-Results are written under `runs/`; JSON files in `runs/` reflect the exact numbers used in the paper.
+Results are written under `runs/`. Seeds are `k*137 + 42` throughout, so reruns
+reproduce the published values exactly.
 
-## Reproducing the paper's numbers
+## The D-GESBL-style baseline
 
-- All headline SER numbers use 10 seeds × 8 batches × 32 realizations (see `multi_seed_error_bars.py`).
-- Fig 10 (channel aging) uses 5 seeds × 4 batches × 16 realizations.
-- See `REPRODUCIBILITY.md` for the full protocol.
+`scripts/dgesbl_baseline.py` is an **adaptation** of Luo *et al.* (IEEE TCOM
+2026, arXiv:2607.18881), not a reimplementation: the superimposed-pilot frame is
+replaced by the embedded pilots every receiver here uses, so all methods see
+identical observations, and the GAMP variant is omitted. It is reported at its
+best over a 32-configuration sweep (`tune_dgesbl.py`, `tune_dgesbl_ext.py`).
+
+The optimum is `T_em=160, grid_lr=0.1`. An earlier 20-point grid put it at
+`T_em=40`, which was the grid's largest value -- a boundary optimum that left
+the baseline under-tuned by about 2 pp at every `B`. `dgesbl_Tem_check.py`
+confirms the baseline's saturation in `B` is structural rather than a shortage
+of EM iterations: the `B=4` / `B=8` tie holds at both `T_em=40` and `T_em=160`.
+This baseline beats our single-block receiver at both operating points; the
+paper's claim is scoped accordingly.
 
 ## Notes
 
-- **No trained weights ship with this repo.** All algorithms are classical/analytical: CFAR + Newton support recovery, ridge LS gain estimation, CG-MMSE symbol detection, reliability-weighted pseudo-pilots, safeguarded-gradient support refinement, and multi-block variants of the above. Anything you might find in a companion repository under `checkpoints/` belongs to an earlier learned-receiver project and is unrelated to this paper.
+- **No trained weights ship with this repo.** Every algorithm here is
+  classical/analytical: peak selection + Newton support recovery, ridge LS gain
+  estimation, CG-MMSE detection, reliability-gated pseudo-pilots,
+  safeguarded-gradient support refinement, and multi-block variants.
+- `scripts/` also contains exploratory and diagnostic code from the development
+  history that no paper result depends on; the table above lists what matters.
 - GPU acceleration is optional; scripts run on CPU (slower).
 
 ## Citation
 
 ```bibtex
-@article{dong_afdm_mbidar_2026,
+@article{dong_afdm_coherent_multiblock_2026,
   author  = {Dong, Liang},
-  title   = {Iterative Multi-Block Data-Aided Off-Grid Channel Estimation
-             and Detection for AFDM},
+  title   = {Coherent Multi-Block Doppler Estimation and Data-Aided
+             Detection for AFDM},
   journal = {IEEE Trans. Commun.},
   year    = {2026},
   note    = {Under review}

@@ -24,19 +24,21 @@ from afdm.operators import FastAFDMOperator
 from afdm.support import ambiguity_function, cfar_peaks, newton_refine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from multiblock_dasbl import multiblock_ls_gains_data_aided, multiblock_lm_theta
+from multiblock_dasbl import (multiblock_ls_gains_data_aided, multiblock_lm_theta,
+                              aperture_synthesis_kappa_refine)
+from afdm.multi_block import block_doppler_phase
 
 
 SNR = 15.0
 B_BLOCK = 4
 T_MAX = 10
-N_SEEDS = 2
-N_BATCHES = 6
-BATCH_SIZE = 16
+N_SEEDS = 3
+N_BATCHES = 8
+BATCH_SIZE = 32
 
 
 def receiver_with_trace(system, batch, const, cfg, T_max=T_MAX,
-                        n_lm_per_outer=3, rho_min=0.9, use_reacq=True,
+                        n_lm_per_outer=3, rho_min=0.5, use_reacq=True,
                         lambda_ridge=1e-3):
     """Same as multiblock_dasbl_receiver but returns SER trace over iterations."""
     r = batch.r; y = batch.y
@@ -61,9 +63,17 @@ def receiver_with_trace(system, batch, const, cfg, T_max=T_MAX,
     for b in range(B_block):
         x_pilot[:, b, pp[b]] = pv[b].unsqueeze(0)
 
+    N_cp_int = int(cfg.ell_max)
+    beta = (N + N_cp_int) / N
+
     A_sum, e_g, k_g = multi_block_ambiguity(x_pilot)
     peak_idx, _ = cfar_peaks(A_sum, K=cfg.P_max, min_separation=2)
     ell_hat, kap_hat = newton_refine(A_sum, peak_idx, e_g, k_g, max_iter=2)
+    if B_block > 1:
+        kap_hat = aperture_synthesis_kappa_refine(
+            system, r, x_pilot, ell_hat, kap_hat, N_cp=N_cp_int,
+            kappa_window=0.30, kappa_step=0.003, beta=beta,
+        )
 
     h_hat = multiblock_ls_gains_data_aided(system, batch, ell_hat, kap_hat, x_pilot,
                                            lambda_ridge=lambda_ridge)
@@ -73,7 +83,9 @@ def receiver_with_trace(system, batch, const, cfg, T_max=T_MAX,
         p_ms = torch.zeros(B_batch, B_block, N, const.numel(), dtype=torch.float32, device=device)
         hard = torch.zeros(B_batch, B_block, N, dtype=torch.long, device=device)
         for b in range(B_block):
-            op = FastAFDMOperator(system=system, ell=ell_hat, kappa=kap_hat, h=h_hat)
+            phase_b = block_doppler_phase(kap_hat, b, N, N_cp_int)
+            h_b = h_hat * phase_b
+            op = FastAFDMOperator(system=system, ell=ell_hat, kappa=kap_hat, h=h_b)
             def mv(v): return op.rmatvec(op.matvec(v)) + sigma_w2 * v
             z = cg_solve(mv, op.rmatvec(y[:, b, :]), max_iter=30)
             dists = (z.unsqueeze(-1) - const.reshape(1, 1, -1)).abs() ** 2
@@ -100,13 +112,20 @@ def receiver_with_trace(system, batch, const, cfg, T_max=T_MAX,
             A_sum, e_g, k_g = multi_block_ambiguity(x_hats)
             peak_idx, _ = cfar_peaks(A_sum, K=cfg.P_max, min_separation=2)
             ell_new, kap_new = newton_refine(A_sum, peak_idx, e_g, k_g, max_iter=2)
+            if B_block > 1:
+                kap_new = aperture_synthesis_kappa_refine(
+                    system, r, x_hats, ell_new, kap_new, N_cp=N_cp_int,
+                    kappa_window=0.30, kappa_step=0.003, beta=beta,
+                )
             def stacked_residual(ell_t, kap_t):
                 h_t = multiblock_ls_gains_data_aided(system, batch, ell_t, kap_t, x_hats,
                                                      lambda_ridge=lambda_ridge)
                 res = torch.zeros(B_batch, device=device)
                 for b in range(B_block):
                     A = build_regression_matrix(system, ell_t, kap_t, x_hats[:, b, :])
-                    r_hat = (A @ h_t.unsqueeze(-1)).squeeze(-1)
+                    phase_b = block_doppler_phase(kap_t, b, N, N_cp_int)
+                    A_b = A * phase_b.unsqueeze(1)
+                    r_hat = (A_b @ h_t.unsqueeze(-1)).squeeze(-1)
                     res = res + (batch.r[:, b, :] - r_hat).abs().pow(2).sum(dim=-1)
                 return res, h_t
             res_new, _ = stacked_residual(ell_new, kap_new)

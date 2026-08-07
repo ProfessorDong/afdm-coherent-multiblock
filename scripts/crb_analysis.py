@@ -28,7 +28,7 @@ from scipy.optimize import linear_sum_assignment
 
 from afdm.classical import build_regression_matrix
 from afdm.experiments import ExperimentConfig
-from afdm.multi_block import PILOT_DESIGNS, sample_multiblock
+from afdm.multi_block import PILOT_DESIGNS, block_doppler_phase, sample_multiblock
 from afdm.operators import FastAFDMOperator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -92,12 +92,16 @@ def numerical_fim(system, batch, ell_true, kap_true, h_true, x_ref, eps=1e-3):
     P = ell_true.shape[1]
     sigma_w2 = batch.sigma_w2_block
 
+    N_cp = system.ell_max
     def mu_all(ell_c, kap_c):
-        """Compute mu_b = A_b(theta, x_b) h for all b. Returns (B_batch, B_block, N)."""
+        """Compute mu_b = A_b(theta, x_b) D_b(kappa) h for all b under the physical model.
+        Returns (B_batch, B_block, N)."""
         mu = torch.zeros(B_batch, B_block, N, dtype=torch.complex64, device=device)
         for b in range(B_block):
             A = build_regression_matrix(system, ell_c, kap_c, x_ref[:, b, :])
-            mu[:, b, :] = (A @ h_true.unsqueeze(-1)).squeeze(-1)
+            phase_b = block_doppler_phase(kap_c, b, N, N_cp)             # (B_batch, P)
+            A_b = A * phase_b.unsqueeze(1)                               # phase-corrected atoms
+            mu[:, b, :] = (A_b @ h_true.unsqueeze(-1)).squeeze(-1)
         return mu
 
     # Baseline
@@ -170,7 +174,7 @@ def measure_theta_mse(cfg, snr_db, B_block, design="hopping",
         with torch.no_grad():
             hard, ell_hat, kap_hat, h_hat = multiblock_dasbl_receiver(
                 system, batch, const, cfg,
-                n_outer=6, n_lm_per_outer=3, rho_min=0.9, use_reacq=True,
+                n_outer=6, n_lm_per_outer=3, rho_min=0.5, use_reacq=True,
             )
         # Match to true.
         match = hungarian_match(ell_hat, kap_hat, batch.theta_true[..., 0],

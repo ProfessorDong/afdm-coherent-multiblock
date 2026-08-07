@@ -29,7 +29,7 @@ from afdm.classical import ClassicalCGDetector, cg_solve
 from afdm.experiments import ExperimentConfig, qpsk_constellation
 from afdm.jpnce_sbl import JPNCESBLDetector
 from afdm.multi_block import (
-    PILOT_DESIGNS, sample_multiblock, MultiBlockBatch,
+    PILOT_DESIGNS, sample_multiblock, MultiBlockBatch, block_doppler_phase,
 )
 from afdm.operators import FastAFDMOperator
 from afdm.support import SupportRecovery
@@ -59,8 +59,14 @@ def sample_multiblock_tdl(system, tdl_channel, constellation, pp, pv,
         x[:, b, pp[b]] = pv[b].unsqueeze(0)
     labels = (x.unsqueeze(-1) - constellation.reshape(1, 1, 1, -1)).abs().argmin(dim=-1)
 
-    op = FastAFDMOperator(system=system, ell=ell, kappa=kap, h=h_true)
-    y_clean_list = [op.matvec(x[:, b, :]) for b in range(N_block)]
+    # Apply per-block Doppler phase h_b = h_true * D_b(kappa)
+    N_cp = system.ell_max
+    y_clean_list = []
+    for b in range(N_block):
+        phase_b = block_doppler_phase(kap, b, N, N_cp)
+        h_b = h_true * phase_b
+        op_b = FastAFDMOperator(system=system, ell=ell, kappa=kap, h=h_b)
+        y_clean_list.append(op_b.matvec(x[:, b, :]))
     y_clean = torch.stack(y_clean_list, dim=1)
     signal_pow = (y_clean.abs() ** 2).mean()
     sigma_w2 = 10 ** (-snr_db / 10)
@@ -139,7 +145,7 @@ def evaluate_tdl(P_use, delay_spread_ns, doppler_hz, N_p, B_block,
             with torch.no_grad():
                 hard, _, _, _ = multiblock_dasbl_receiver(
                     system, batch, const, cfg,
-                    n_outer=6, n_lm_per_outer=3, rho_min=0.9, use_reacq=True,
+                    n_outer=6, n_lm_per_outer=3, rho_min=0.5, use_reacq=True,
                 )
             mask = batch.pilot_mask
             ser = float(((hard != batch.labels) * mask).float().sum() / mask.float().sum())
@@ -153,19 +159,30 @@ _cached_system = [None]
 
 
 def main():
+    import json
+    from pathlib import Path
     print("=" * 80)
-    print("TDL-C CHANNEL EVALUATION (3GPP TS 38.901)")
+    print("TDL-C CHANNEL EVALUATION (3GPP TS 38.901) -- physical model with D_b(kappa)")
     print("=" * 80)
 
+    results = {}
     for P_use in (5, 7):
         for doppler_hz in (500, 3000):
+            key = f"P{P_use}_nu{doppler_hz}"
+            results[key] = {}
             print(f"\n--- P_use={P_use}, doppler_hz={doppler_hz} ---")
             for B in (1, 2, 4, 8):
-                N_p_per = 32 // max(B // 2, 1)   # rough scaling; keep aggregate ~64
+                N_p_per = 32 // max(B // 2, 1)   # keeps aggregate ~64
                 if N_p_per < 8:
                     N_p_per = 8
-                evaluate_tdl(P_use=P_use, delay_spread_ns=100, doppler_hz=doppler_hz,
-                             N_p=N_p_per, B_block=B, snr_dbs=(15.0,))
+                r = evaluate_tdl(P_use=P_use, delay_spread_ns=100, doppler_hz=doppler_hz,
+                                 N_p=N_p_per, B_block=B, snr_dbs=(15.0,),
+                                 n_batches=8, batch_size=32)
+                results[key][str(B)] = {"ser": r[15.0], "N_p": N_p_per}
+
+    out = Path("runs/tdlc_v2.json"); out.parent.mkdir(parents=True, exist_ok=True)
+    json.dump(results, open(out, "w"), indent=2)
+    print(f"\nSaved: {out}")
 
 
 if __name__ == "__main__":

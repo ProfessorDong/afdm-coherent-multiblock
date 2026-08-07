@@ -27,6 +27,7 @@ from afdm.experiments import ExperimentConfig
 from afdm.multi_block import (
     MultiBlockBatch,
     PILOT_DESIGNS,
+    block_doppler_phase,
     sample_multiblock,
 )
 from afdm.operators import FastAFDMOperator
@@ -65,14 +66,17 @@ def sample_aged_batch(system, channel, const, pp, pv, batch_size, snr_db,
         x[:, b, pp[b]] = pv[b].unsqueeze(0)
     labels = (x.unsqueeze(-1) - const.reshape(1, 1, 1, -1)).abs().argmin(dim=-1)
 
-    # Per-block drift on theta.
+    # Per-block drift on theta + block-dependent Doppler phase h_b = h * D_b(kap_b).
+    N_cp = system.ell_max
     y_clean_list = []
     for b in range(B_block):
         u_e = (2.0 * torch.rand(batch_size, P, device=device, generator=generator) - 1.0)
         u_k = (2.0 * torch.rand(batch_size, P, device=device, generator=generator) - 1.0)
         ell_b = (ell0 + drift * u_e).clamp(min=0.0, max=system.ell_max)
         kap_b = (kap0 + drift * u_k).clamp(min=-system.kappa_max, max=system.kappa_max)
-        op_b = FastAFDMOperator(system=system, ell=ell_b, kappa=kap_b, h=h_true)
+        phase_b = block_doppler_phase(kap_b, b, N, N_cp)
+        h_b = h_true * phase_b
+        op_b = FastAFDMOperator(system=system, ell=ell_b, kappa=kap_b, h=h_b)
         y_clean_list.append(op_b.matvec(x[:, b, :]))
     y_clean = torch.stack(y_clean_list, dim=1)
 
@@ -110,7 +114,7 @@ def eval_aging(cfg, snr_db, B_block, drift, seed):
                                   drift=drift, generator=gen)
         hard, _, _, _ = multiblock_dasbl_receiver(system, batch, const, cfg,
                                                    n_outer=6, n_lm_per_outer=3,
-                                                   rho_min=0.9, use_reacq=True)
+                                                   rho_min=0.5, use_reacq=True)
         mask = batch.pilot_mask
         ser = float(((hard != batch.labels) * mask).float().sum() / mask.float().sum())
         ser_acc += ser
