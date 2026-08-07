@@ -350,6 +350,15 @@ def main():
     print()
     print("Top-K recall < 90% at K=12: local-max candidate set is insufficient.")
 
+    # Persist the ladder so the R1-R4 values quoted in the paper are traceable.
+    import json
+    from pathlib import Path
+    Path("runs/oracle_ladder.json").write_text(json.dumps(
+        {"snrs": snrs, "n_batches": n_batches, "batch_size": batch_size,
+         "EASY (P=3, N_p=32)": res_easy, "HARD (P=5, N_p=16)": res_hard},
+        indent=1, default=str))
+    print("Saved: runs/oracle_ladder.json")
+
 
 if __name__ == "__main__":
     main()

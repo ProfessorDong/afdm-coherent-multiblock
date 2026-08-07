@@ -31,7 +31,7 @@ Every number in the paper traces to a JSON file under `runs/`.
 | Paper item | Script | Artifact |
 |---|---|---|
 | Table I (SER at 15 dB) | `multi_seed_error_bars.py`, `scaling_B_v2.py`, `run_dgesbl_retuned.py` | `multiseed_15db.json`, `scaling_B_v2.json`, `dgesbl_retuned.json` |
-| Table II (fair aggregate pilots) | `fair_pilots_v2.py`, `run_dgesbl_retuned.py` | `fair_pilots_v2.json`, `dgesbl_retuned.json` |
+| Table II (fixed aggregate pilot count) | `fair_pilots_v2.py`, `run_dgesbl_retuned.py` | `fair_pilots_v2.json`, `dgesbl_retuned.json` |
 | Table III (ablation) | `ablation_v2.py` | `ablation_v2.json` |
 | Table IV (nuisance-eliminated CRB) | `crb_nuisance.py`, `crb_vs_B.py` | `crb_nuisance.json`, `crb_vs_B.json` |
 | Table V (hyperparameters) | `hp_robustness.py` (+/-30% sweep) | `hp_robustness.json` |
@@ -45,6 +45,9 @@ Every number in the paper traces to a JSON file under `runs/`.
 | 16-QAM / high-order study | `highorder_sweep.py` | `highorder_sweep.json` |
 | Convergence in `T` | `convergence_v3.py` | `convergence_v3.json` |
 | Noise-mismatch robustness | `robustness_v2.py` | `robustness_v2.json` |
+| Oracle ladder R1-R4 (Sec. III) | `oracle_ladder.py` | `oracle_ladder.json` |
+| Inter-block phase coherence / CFO | `phase_coherence.py` | `phase_coherence.json` |
+| Correct-cell probability, fixed `P_max`, held-out D-GESBL tuning | `reviewer_response.py` | `reviewer_response.json` |
 
 See `REPRODUCIBILITY.md` for the exact protocol behind each entry, including
 which files supersede earlier ones.
@@ -78,6 +81,21 @@ confirms the baseline's saturation in `B` is structural rather than a shortage
 of EM iterations: the `B=4` / `B=8` tie holds at both `T_em=40` and `T_em=160`.
 This baseline beats our single-block receiver at both operating points; the
 paper's claim is scoped accordingly.
+
+## Scope and known limitations
+
+- Results are **QPSK only**. 16-QAM fails (about 83% SER); `highorder_sweep.py`
+  reproduces the diagnosis, which is noise amplification through an
+  ill-conditioned operator rather than unmodelled interference.
+- The reported tables use `P_max = P+3`, i.e. the model order is assumed known
+  to within a fixed offset. `reviewer_response.py` re-runs EASY at a fixed
+  `P_max = 8` independent of `P`: HARD is unaffected (it already uses 8) and the
+  multi-block EASY points move by no more than 0.2 pp.
+- The coherent search uses **equal** per-block weights, matching the
+  equal-weight form of Corollary 2. The weighted generalization in that
+  corollary is not implemented.
+- `phase_coherence.py` bounds the usable aperture: at roughly one radian of
+  accumulated block phase, `B=8` stops beating `B=4`.
 
 ## Notes
 

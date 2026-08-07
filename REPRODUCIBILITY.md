@@ -265,3 +265,30 @@ is consistent with the B=1 per-path RMSE in Table IV (1.55 / 1.48).
 The sentence "under the nominal weighting the same sweep spanned 23.4% to 18.2%"
 (noise-mismatch robustness) has no surviving run file; `runs/robustness_v2.json`
 records only the calibrated arm. Re-run or drop before camera-ready.
+
+### Inter-block phase coherence (synchronization remark)
+
+`scripts/phase_coherence.py` -> `runs/phase_coherence.json`, `.log`.
+
+Injects, in the time domain where an oscillator acts, a Wiener block-phase walk
+(per-block increment std sigma_phi; accumulated std sigma_phi*sqrt(B-1)) and a
+residual CFO normalized to subcarrier spacing, then recomputes the DAFT-domain
+observation so both receiver inputs stay consistent. HARD, 15 dB, 3 seeds x 8
+batches x 32.
+
+Phase noise, SER vs accumulated deviation:
+
+    accum (rad)   0.00   0.26   0.53   1.06
+    B=8          15.39  15.97  16.87  21.29
+    B=4          17.56  17.76  18.31  20.37
+
+The aperture still pays at ~0.5 rad; at ~1 rad B=8 no longer beats B=4, so
+accumulated phase -- not B -- bounds the usable aperture. sigma_phi=0
+reproduces the published Hard curve (50.3/26.5/17.6/15.4 at 3 seeds vs
+49.9/26.7/17.7/15.8 at 5). B=1 is invariant to sigma_phi by construction.
+
+CFO at B=8: 15.39, 15.46, 15.53, 15.40% for eps = 0, 1e-4, 1e-3, 1e-2 -- max
+deviation 0.13 pp, confirming a path-common ramp is absorbed by CG-MMSE.
+
+Both results replace previously unverified assertions in the synchronization
+remark ("well below one radian"; "benign for communication").
